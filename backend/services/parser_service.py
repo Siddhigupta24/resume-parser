@@ -6,7 +6,14 @@ from datetime import datetime
 from names_dataset import NameDataset
 
 nlp = spacy.load("en_core_web_sm")          
-nd = NameDataset()                   
+
+_nd = None
+
+def get_nd():
+    global _nd
+    if _nd is None:
+        _nd = NameDataset()
+    return _nd                 
 
 # SECTION 1 — CLEAN THE TEXT
 
@@ -571,7 +578,7 @@ def normalize_name(name: str) -> str:
 def is_known_name(word: str) -> bool:
     """Check if a word is a known first name globally using names-dataset"""
     try:
-        result = nd.search(word.capitalize())
+        get_nd().search(word.capitalize())
         # result is a dict with 'first_name' and 'last_name' keys
         # each contains country data if the name exists
         return (result is not None and
