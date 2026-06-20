@@ -47,6 +47,7 @@ function CandidatesPage() {
     } finally { setLoading(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchCandidates(); }, []);
 
   const totalPages = Math.ceil(candidates.length / itemsPerPage);
