@@ -41,10 +41,7 @@ app = FastAPI(                                      # Line 33
 
 app.add_middleware(                                 # Line 44
     CORSMiddleware,                                 # Line 45
-    allow_origins=[
-        "http://localhost:3000",
-        "https://fortunate-surprise-production-b39a.up.railway.app"
-    ],        # Line 46
+    allow_origins=["*"],        
     allow_credentials=True,                         # Line 47
     allow_methods=["*"],                            # Line 48
     allow_headers=["*"],                            # Line 49
