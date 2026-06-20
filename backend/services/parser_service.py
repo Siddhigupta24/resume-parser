@@ -1,11 +1,17 @@
-import re                                    
-import spacy                                 
+import re                                                                    
 from dateutil import parser as date_parser   
 from dateutil.relativedelta import relativedelta  
 from datetime import datetime                
 from names_dataset import NameDataset
 
-nlp = spacy.load("en_core_web_sm")          
+_nlp = None
+
+def get_nlp():
+    global _nlp
+    if _nlp is None:
+        import spacy
+        _nlp = spacy.load("en_core_web_sm")
+    return _nlp       
 
 _nd = None
 
