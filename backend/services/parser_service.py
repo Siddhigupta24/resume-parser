@@ -176,7 +176,7 @@ def extract_city_country(text: str) -> tuple:
 
 def extract_work_history(sections: dict) -> dict:
     exp_text = sections.get("experience", "")
-    lines = exp_text.split("\n")
+    lines = [l.strip() for l in exp_text.split("\n") if l.strip()]
 
     work_entries = []
     current_company = None
@@ -184,13 +184,16 @@ def extract_work_history(sections: dict) -> dict:
     previous_companies = []
     previous_designations = []
 
-    for line in lines:
-        line = line.strip()
-        if not line or len(line) < 3:
-            continue
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        # Skip bullet points
         if line.startswith(("-", "•", "●", "*", "◆")):
+            i += 1
             continue
 
+        # PIPE FORMAT: Operations Manager | Amazon | May 2019 - Present
         if "|" in line:
             parts = [p.strip() for p in line.split("|")]
             parts = [p for p in parts if p and len(p) > 1]
@@ -201,11 +204,10 @@ def extract_work_history(sections: dict) -> dict:
 
             for part in parts:
                 part_lower = part.lower()
-                if any(m in part_lower for m in ["jan", "feb", "mar", "apr",
-                    "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-                    "present", "current", "now"]):
+                if any(m in part_lower for m in ["jan","feb","mar","apr","may","jun",
+                    "jul","aug","sep","oct","nov","dec","present","current","now"]):
                     duration = part
-                    if any(w in part_lower for w in ["present", "current", "now"]):
+                    if any(w in part_lower for w in ["present","current","now"]):
                         is_current = True
                 elif not company:
                     company = part
@@ -224,21 +226,56 @@ def extract_work_history(sections: dict) -> dict:
                         previous_companies.append(company)
                     if designation and designation not in previous_designations:
                         previous_designations.append(designation)
+            i += 1
+            continue
 
-        elif re.search(r'\b(19|20)\d{2}\b', line):
-            is_current = any(w in line.lower() for w in ["present", "current", "now"])
-            clean = re.sub(r'[–\-–].*$', '', line).strip()
-            clean = re.sub(r'\b(19|20)\d{2}\b', '', clean).strip()
-            clean = re.sub(r'\s+', ' ', clean).strip()
+        # MULTI-LINE BLOCK FORMAT:
+        # Line 0: Designation
+        # Line 1: Company — Location
+        # Line 2: May 2019 – Present
+        if (i + 2 < len(lines)):
+            next_line = lines[i + 1]
+            date_line = lines[i + 2]
 
-            if clean and len(clean) > 2:
-                entry = {"company": clean, "designation": None,
-                         "duration": line, "is_current": is_current}
+            has_date = re.search(
+                r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|'
+                r'January|February|March|April|June|July|August|'
+                r'September|October|November|December|Present|Current)'
+                r'.*(19|20)\d{2}|(19|20)\d{2}.*'
+                r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Present|Current)',
+                date_line, re.IGNORECASE
+            )
+
+            is_company_line = (
+                not re.search(r'\b(19|20)\d{2}\b', next_line)
+                and not next_line.startswith(("-", "•"))
+                and len(next_line) > 3
+            )
+
+            if has_date and is_company_line:
+                designation = line
+                # Strip location after — or ,
+                company = re.split(r'[—–,]', next_line)[0].strip()
+                duration = date_line
+                is_current = bool(re.search(
+                    r'present|current|now', date_line, re.IGNORECASE))
+
+                entry = {"company": company, "designation": designation,
+                         "duration": duration, "is_current": is_current}
                 work_entries.append(entry)
-                if is_current and not current_company:
-                    current_company = clean
-                elif not is_current and clean not in previous_companies:
-                    previous_companies.append(clean)
+
+                if is_current:
+                    current_company = company
+                    current_designation = designation
+                else:
+                    if company not in previous_companies:
+                        previous_companies.append(company)
+                    if designation and designation not in previous_designations:
+                        previous_designations.append(designation)
+                i += 3
+                continue
+
+        i += 1
 
     return {
         "current_company": current_company,
