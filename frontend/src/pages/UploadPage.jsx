@@ -33,7 +33,19 @@ function UploadPage() {
     fd.append('file', file);
     try {
       const res = await axios.post(`${API_URL}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setResult(res.data);
+      if (res.data.status === 'duplicate') {
+        const replace = window.confirm(
+          `⚠️ ${res.data.message}\n\nDo you want to replace the existing resume with this new one?`
+        );
+        if (replace) {
+          await axios.put(`${API_URL}/replace/${res.data.existing_id}`, res.data.parsed_data);
+          setResult({ parsing_status: res.data.parsed_data.parsing_status, data: res.data.parsed_data });
+        } else {
+          setError('Upload cancelled. Existing resume kept.');
+        }
+      } else {
+        setResult(res.data);
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Something went wrong.');
     } finally { setUploading(false); }
