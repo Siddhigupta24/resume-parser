@@ -66,10 +66,6 @@ async def upload_resume(file: UploadFile = File(...)):
     if not is_valid:
         raise HTTPException(status_code=400, detail=message)
 
-    existing = await collection.find_one({"file_name": file.filename})
-    if existing:
-        raise HTTPException(status_code=409, detail="A resume with this filename already exists.")
-
     unique_filename, file_path = save_file(file.filename, file_content)
 
     raw_text = extract_text(file_path)
@@ -87,8 +83,6 @@ async def upload_resume(file: UploadFile = File(...)):
             os.remove(file_path)
         except:
             pass
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
 
     if not parsed_data:
@@ -101,6 +95,19 @@ async def upload_resume(file: UploadFile = File(...)):
     parsed_data["file_name"] = file.filename
     parsed_data["file_path"] = file_path
 
+    # Check duplicate by email
+    candidate_email = parsed_data.get("email")
+    if candidate_email:
+        existing = await collection.find_one({"email": candidate_email})
+        if existing:
+            return {
+                "status": "duplicate",
+                "message": f"A resume for {existing.get('name', 'this candidate')} already exists.",
+                "existing_id": str(existing["_id"]),
+                "existing_name": existing.get("name"),
+                "parsed_data": parsed_data
+            }
+
     result = await collection.insert_one(parsed_data)
     clean_response = build_clean_response(parsed_data, result.inserted_id)
 
@@ -110,6 +117,24 @@ async def upload_resume(file: UploadFile = File(...)):
         "parsing_status": clean_response["parsing_status"],
         "data": clean_response
     }
+
+
+@router.put("/replace/{candidate_id}")
+async def replace_resume(candidate_id: str, updates: dict):
+    try:
+        object_id = ObjectId(candidate_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid candidate ID.")
+
+    result = await collection.update_one(
+        {"_id": object_id},
+        {"$set": updates}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    updated = await collection.find_one({"_id": object_id})
+    return format_candidate(updated)
 
 
 @router.get("/candidate/{candidate_id}")
@@ -143,7 +168,11 @@ async def search_candidates(
         query["name"] = {"$regex": name, "$options": "i"}
 
     if skill:
-        query["skills"] = {"$in": [skill]}
+        skills_list = [s.strip() for s in skill.split(",") if s.strip()]
+        if len(skills_list) > 1:
+            query["skills"] = {"$all": skills_list}  # must have ALL skills
+        else:
+            query["skills"] = {"$in": skills_list}
 
     if min_experience is not None:
         query.setdefault("total_experience", {})
@@ -434,11 +463,6 @@ async def upload_bulk(files: List[UploadFile] = File(...)):
                 results.append({"file_name": file.filename, "status": "Failed", "message": message})
                 continue
 
-            existing = await collection.find_one({"file_name": file.filename})
-            if existing:
-                results.append({"file_name": file.filename, "status": "Duplicate", "message": "Already exists in database"})
-                continue
-
             unique_filename, file_path = save_file(file.filename, file_content)
 
             raw_text = extract_text(file_path)
@@ -470,6 +494,16 @@ async def upload_bulk(files: List[UploadFile] = File(...)):
 
             parsed_data["file_name"] = file.filename
             parsed_data["file_path"] = file_path
+
+            # Check duplicate by email
+            candidate_email = parsed_data.get("email")
+            if candidate_email:
+                existing = await collection.find_one({"email": candidate_email})
+                if existing:
+                    results.append({"file_name": file.filename, "status": "Duplicate", "message": f"Resume for {existing.get('name', candidate_email)} already exists"})
+                    try: os.remove(file_path)
+                    except: pass
+                    continue
 
             result = await collection.insert_one(parsed_data)
             results.append({

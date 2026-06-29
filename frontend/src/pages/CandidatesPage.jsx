@@ -226,7 +226,7 @@ function CandidatesPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
           {[
             ['Search by Name', nameFilter, setNameFilter, 'e.g. Rahul Sharma', 'text'],
-            ['Skill', skill, setSkill, 'e.g. Python', 'text'],
+            ['Skill', skill, setSkill, 'e.g. Python, React', 'text'],
             ['Min Experience (yrs)', minExp, setMinExp, '', 'number'],
             ['Max Experience (yrs)', maxExp, setMaxExp, '', 'number'],
             ['Location', location, setLocation, 'e.g. Delhi', 'text'],
